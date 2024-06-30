@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "hardhat/console.sol";
 
-contract DegenToken is ERC20, Ownable, ERC20Burnable {
-    string public listItems =
+contract DegenToken is Ownable {
+    string public name = "Degen Token";
+    string public symbol = "DGN";
+    string private listItems =
         "Items => 1 : armor : 10 | 2 : sword : 15 | 3 : elixor : 20";
     mapping(address => string[]) private inventory;
     mapping(uint => string) private items;
@@ -16,9 +16,7 @@ contract DegenToken is ERC20, Ownable, ERC20Burnable {
     mapping(address => uint) private balance;
     uint private totalTokens = 0;
 
-    constructor(
-        uint initialSupply
-    ) ERC20("DegenToken", "DGN") Ownable(msg.sender) {
+    constructor(uint initialSupply) Ownable(msg.sender) {
         items[1] = "armor";
         items[2] = "sword";
         items[3] = "elixor";
@@ -28,16 +26,20 @@ contract DegenToken is ERC20, Ownable, ERC20Burnable {
         mint(msg.sender, initialSupply);
     }
 
+    function store() public view returns (string memory) {
+        return listItems;
+    }
+
     function mint(address to, uint256 amount) public onlyOwner {
         toBeRedeemed[to] += amount;
         totalTokens += amount;
     }
 
-    function totalSupply() public view override returns (uint) {
+    function totalSupply() public view returns (uint) {
         return totalTokens;
     }
 
-    function decimals() public pure override returns (uint8) {
+    function decimals() public pure returns (uint8) {
         return 0;
     }
 
@@ -45,41 +47,49 @@ contract DegenToken is ERC20, Ownable, ERC20Burnable {
         return balanceOf(msg.sender);
     }
 
-    function burn(uint256 amount) public override onlyOwner {
-        _burn(msg.sender, amount);
+    function burn(uint256 amount) public {
+        require(balance[msg.sender] >= amount, "Not enough balance");
+        balance[msg.sender] -= amount;
+        totalTokens -= amount;
     }
 
-    function burnFrom(
-        address account,
-        uint256 amount
-    ) public override onlyOwner {
+    function burnFrom(address account, uint256 amount) public onlyOwner {
         require(
             balanceOf(account) >= amount,
             "ERC20: burn amount exceeds balance"
         );
-        _burn(account, amount);
+        balance[account] -= amount;
+        totalTokens -= amount;
+    }
+
+    function transfer(address to, uint value) public returns (bool) {
+        require(balanceOf(msg.sender) >= value, "Not enough balance");
+        balance[msg.sender] -= value;
+        balance[to] += value;
+        return true;
     }
 
     function transferFrom(
         address sender,
         address recipient,
         uint256 amount
-    ) public override onlyOwner returns (bool) {
+    ) public onlyOwner returns (bool) {
         require(
             balanceOf(sender) >= amount,
             "ERC20: transfer amount exceeds balance"
         );
-        _transfer(sender, recipient, amount);
+        balance[sender] -= amount;
+        balance[recipient] += amount;
         return true;
     }
 
-    function balanceOf(address account) public view override returns (uint256) {
+    function balanceOf(address account) public view returns (uint256) {
         return balance[account];
     }
 
     function purchaseItems(uint256 itemId) public {
         require(itemId > 0 && itemId < 4, "Item not found");
-        string storage item = items[itemId];
+        string memory item = items[itemId];
 
         require(
             balanceOf(msg.sender) >= itemPrices[item],
@@ -88,7 +98,7 @@ contract DegenToken is ERC20, Ownable, ERC20Burnable {
 
         inventory[msg.sender].push(item);
 
-        transferFrom(msg.sender, owner(), itemPrices[item]);
+        transfer(owner(), itemPrices[item]);
     }
 
     function viewInventory() public view returns (string[] memory) {
